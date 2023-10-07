@@ -15,7 +15,12 @@ return {
 				setting_id = "single_bonk_noise",
 				type = "checkbox",
 				default_value = false
-			}
+			},
+      {
+        setting_id = "rock_pickup",
+        type = "checkbox",
+        default_value = false
+      }
 		}
 	}
 }
