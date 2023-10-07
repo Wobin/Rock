@@ -10,5 +10,8 @@ return {
   },
   single_bonk_noise = {
     en = "Only use a single bonk"
-  }
+  },
+  rock_pickup = {
+    en = "Notify when you find a new rock"
+    }
 }
