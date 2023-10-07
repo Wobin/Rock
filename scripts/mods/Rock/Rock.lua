@@ -3,6 +3,7 @@ Title: Rock
 Author: Wobin
 Date: 07/10/2023
 Repository: https://github.com/Wobin/Rock
+Version: 1.0
 ]]--
 
 local CharacterSheet = require("scripts/utilities/character_sheet")
