@@ -1,15 +1,15 @@
 --[[
 Title: Rock
 Author: Wobin
-Date: 07/10/2023
+Date: 12/10/2023
 Repository: https://github.com/Wobin/Rock
-Version: 1.0
+Version: 2.0
 ]]--
 
 local CharacterSheet = require("scripts/utilities/character_sheet")
 local mod = get_mod("Rock")
 local Audio
-local WeOgryn = false
+
 local HoldingRock
 local player
 local math_random = math.random
@@ -66,6 +66,9 @@ local pickup = {
    "find/Charlie Brown_ I got a rock.opus",
    "find/found-01.opus",
    "find/found-02.opus",
+   "find/fatherted.opus",
+   "find/a-rock.opus",
+   "find/rock-and-stone.opus",
   }
   
 local class_loadout = {
@@ -74,19 +77,40 @@ local class_loadout = {
 	aura = {}
 }
 local lastshout
+local lastfriend
 local lastbonk
 local lastpickup
 
-local shoutRock = function(delta)  
-    if HoldingRock and (delta == nil or delta > 0.1) then       
-       local ran = table.get_random_array_indices(#rockShouts,1)
-       if ran[1] == lastshout then
-         ran = table.get_random_array_indices(#rockShouts,1)
-       end
-       lastshout = ran[1]
-       Audio.play_file(rockShouts[ran[1]], { audio_type = "sfx", adelay = "20000|20000", chorus = "0.6:0.9:50|60:0.4|0.32:0.25|0.4:2|1.3",volume = 100,silenceremove = "start_periods=1:stop_periods=1", })       
-        if mod:get("friend_ogryn") then
-          mod:FindFrendgryn()
+local WeOgryn = function()
+    player = Managers.player:local_player(1)  
+    if not player then return false end
+    return player:profile().archetype.breed == "ogryn"     
+end
+
+local getRandomSound = function(soundPool, lastShout)
+  local ran = table.get_random_array_indices(#soundPool,1)
+  if ran[1] == lastShout then
+     ran = table.get_random_array_indices(#soundPool,1)
+  end
+  lastShout = ran[1]
+  return soundPool[ran[1]]
+end
+
+mod.FriendShout = function (attacking_unit)
+  local player_manager = Managers.player
+	local players = player_manager:players()  
+  for i,member in pairs(players) do            
+    if member ~= player and member:is_human_controlled() and member._profile.archetype.breed == "ogryn" and (not attacking_unit or (attacking_unit and member.player_unit ~= attacking_unit)) then          
+          Audio.play_file(getRandomSound(friendgryn, lastfriend), { audio_type = "sfx", adelay = "1200|1200", chorus = "0.6:0.9:50|60:0.4|0.32:0.25|0.4:2|1.3" }, member.player_unit, 0.001, 100)        
+    end
+  end    
+end
+
+local shoutRock = function(delta, override)    
+    if (override or HoldingRock) and (delta == nil or delta > 0.1) then             
+       Audio.play_file(getRandomSound(rockShouts, lastshout), { audio_type = "sfx", adelay = "500|500", chorus = "0.6:0.9:50|60:0.4|0.32:0.25|0.4:2|1.3", })       
+        if mod:get("friend_ogryn") then          
+          mod:FriendShout(override)
         end
        return false
     end
@@ -97,37 +121,21 @@ local getBonk = function()
   if mod:get("single_bonk_noise") then 
     return "impact/bonk_AgRFvsD.mp3" 
   end
-  local ran = table.get_random_array_indices(#impact,1)
-  if ran[1] == lastbonk then
-    ran = table.get_random_array_indices(#impact,1)
-  end  
-  lastbonk = ran[1]
-  return impact[ran[1]]  
+  return getRandomSound( impact, lastbonk)  
 end
 
-local getPickup = function()
-    local ran = table.get_random_array_indices(#pickup,1)
-  if ran[1] == lastPickup then
-    ran = table.get_random_array_indices(#pickup,1)
-  end  
-  lastPickup = ran[1]
-  return pickup[ran[1]]  
-end
-
-local bonkRock = function(delta, source)
-  if HoldingRock and (delta == nil or delta > 0.1) then       
-      Audio.play_file(getBonk(), { audio_type = "sfx", silenceremove = "start_periods=1:stop_periods=1",volume = 100, })                
+local bonkRock = function(source)
+  if HoldingRock then       
+      Audio.play_file(getBonk(), { audio_type = "sfx"}, source, 0.001, 100)                
       return false
   end
 end
 
 local pickupRock = function(delta)
   if delta == nil or delta > 0.1 then
-    Audio.play_file(getPickup(), { audio_type = "sfx", silenceremove = "start_periods=1:stop_periods=1",volume = 100, })                
+    Audio.play_file(getRandomSound(pickup, lastpickup), { audio_type = "sfx" })                
   end
 end
-
-
 
 local doIHaveRock = function()
   local profile = player:profile()    
@@ -135,44 +143,45 @@ local doIHaveRock = function()
   return class_loadout and class_loadout.grenade_ability and class_loadout.grenade_ability.name and class_loadout.grenade_ability.name == "ogryn_grenade_friend_rock"
 end
 
-mod.FindFriendgryn = function(self)
-  
-end
 
-mod.on_game_state_changed = function(status, state_name) 
-  if state_name == "GameplayStateRun" and status == "enter" then    
-    player = Managers.player:local_player(1)  
-    WeOgryn = player:profile().archetype.breed == "ogryn"     
-  end    
-end
-  
 mod.on_all_mods_loaded = function()
     Audio = get_mod("Audio")    
     -- Hook the rock tossing --
     mod:hook_require("scripts/extension_systems/weapon/actions/action_throw_grenade", function(altFire)
       mod:hook_safe(altFire, "start", function(self, ...)              
-        HoldingRock = WeOgryn and self and self._weapon_template and self._weapon_template.projectile_template and self._weapon_template.projectile_template.name == "ogryn_grenade_friend_rock"
+        HoldingRock = WeOgryn() and self and self._weapon_template and self._weapon_template.projectile_template and self._weapon_template.projectile_template.name == "ogryn_grenade_friend_rock"        
       end)
     end)
     
     Audio.hook_sound("wwise/events/weapon/stop_player_combat_weapon_grenader_loop", function(_, _, delta)
-        if WeOgryn and HoldingRock then
+        if WeOgryn() and HoldingRock then
           HoldingRock = shoutRock(delta)
         end      
       return true
     end)
 
-    Audio.hook_sound("wwise/events/weapon/play_ogryn_grenade_rock_impact", function(_, _, delta)
-        if WeOgryn and mod:get("amusing_bonk") and  HoldingRock then
-          bonkRock(delta, "play_ogryn_grenade_rock_impact")
-        end      
-      return false
-    end) 
-    -- Hook when rock regenerates
+     -- Hook when rock regenerates
     Audio.hook_sound("wwise/events/player/play_player_grenade_charge_restored_gen", function(_, _, delta)
-        if WeOgryn and mod:get("rock_pickup") and doIHaveRock() then
+        if WeOgryn() and mod:get("rock_pickup") and doIHaveRock() then
           pickupRock()
         end      
       return true
-    end)   
+    end)     
+  
+  mod:hook_safe(CLASS.FxSystem, "play_impact_fx", function( self,
+        impact_fx,
+        position,
+        direction,
+        source_parameters,
+        attacking_unit,
+        optional_target_unit)
+    if impact_fx.name:match("ogryn_friend_rock") then
+      if (mod:get("amusing_bonk") and (WeOgryn() and HoldingRock)) or mod:get("hear_all_bonk") then          
+        bonkRock(position)
+        if attacking_unit ~= Managers.player:local_player(1).player_unit and mod:get("respond_to_all_bonk") then
+          shoutRock(1, attacking_unit)
+        end
+      end   
+    end
+  end)
 end
