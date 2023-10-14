@@ -69,6 +69,7 @@ local pickup = {
    "find/fatherted.opus",
    "find/a-rock.opus",
    "find/rock-and-stone.opus",
+   "find/ROCK-metalslug.opus",
   }
   
 local class_loadout = {
@@ -81,13 +82,19 @@ local lastfriend
 local lastbonk
 local lastpickup
 
-local WeOgryn = function()
+mod.weOgryn = function()
     player = Managers.player:local_player(1)  
     if not player then return false end
     return player:profile().archetype.breed == "ogryn"     
 end
 
-local getRandomSound = function(soundPool, lastShout)
+mod.doIHaveRock = function()
+  local profile = player:profile()    
+	CharacterSheet.class_loadout(profile, class_loadout)
+  return class_loadout and class_loadout.grenade_ability and class_loadout.grenade_ability.name and class_loadout.grenade_ability.name == "ogryn_grenade_friend_rock"
+end
+
+mod.getRandomSound = function(self,soundPool, lastShout)
   local ran = table.get_random_array_indices(#soundPool,1)
   if ran[1] == lastShout then
      ran = table.get_random_array_indices(#soundPool,1)
@@ -96,52 +103,47 @@ local getRandomSound = function(soundPool, lastShout)
   return soundPool[ran[1]]
 end
 
-mod.FriendShout = function (attacking_unit)
+mod.friendShout = function (self, attacking_unit)
   local player_manager = Managers.player
 	local players = player_manager:players()  
   for i,member in pairs(players) do            
     if member ~= player and member:is_human_controlled() and member._profile.archetype.breed == "ogryn" and (not attacking_unit or (attacking_unit and member.player_unit ~= attacking_unit)) then          
-          Audio.play_file(getRandomSound(friendgryn, lastfriend), { audio_type = "sfx", adelay = "1200|1200", chorus = "0.6:0.9:50|60:0.4|0.32:0.25|0.4:2|1.3" }, member.player_unit, 0.001, 100)        
+          Audio.play_file(mod:getRandomSound(friendgryn, lastfriend), { audio_type = "sfx", adelay = "1200|1200", chorus = "0.6:0.9:50|60:0.4|0.32:0.25|0.4:2|1.3" }, member.player_unit, 0.001)        
     end
   end    
 end
 
-local shoutRock = function(delta, override)    
+mod.shoutRock = function(self, delta, override)    
     if (override or HoldingRock) and (delta == nil or delta > 0.1) then             
-       Audio.play_file(getRandomSound(rockShouts, lastshout), { audio_type = "sfx", adelay = "500|500", chorus = "0.6:0.9:50|60:0.4|0.32:0.25|0.4:2|1.3", })       
+       Audio.play_file(mod:getRandomSound(rockShouts, lastshout), { audio_type = "sfx", adelay = "500|500", chorus = "0.6:0.9:50|60:0.4|0.32:0.25|0.4:2|1.3", })       
         if mod:get("friend_ogryn") then          
-          mod:FriendShout(override)
+          mod:friendShout(override)
         end
        return false
     end
     return true
 end
 
-local getBonk = function()
+mod.getBonk = function()
   if mod:get("single_bonk_noise") then 
     return "impact/bonk_AgRFvsD.mp3" 
   end
-  return getRandomSound( impact, lastbonk)  
+  return mod:getRandomSound( impact, lastbonk)  
 end
 
-local bonkRock = function(source)
-  if HoldingRock then       
-      Audio.play_file(getBonk(), { audio_type = "sfx"}, source, 0.001, 100)                
+mod.bonkRock = function(self, source)
+  if HoldingRock or mod:get("hear_all_bonk") then       
+      Audio.play_file(mod:getBonk(), { audio_type = "sfx"}, source, 0.001, 100)                
       return false
   end
 end
 
-local pickupRock = function(delta)
+mod.pickupRock = function(self, delta)
   if delta == nil or delta > 0.1 then
-    Audio.play_file(getRandomSound(pickup, lastpickup), { audio_type = "sfx" })                
+    Audio.play_file(mod:getRandomSound(pickup, lastpickup), { audio_type = "sfx" })                
   end
 end
 
-local doIHaveRock = function()
-  local profile = player:profile()    
-	CharacterSheet.class_loadout(profile, class_loadout)
-  return class_loadout and class_loadout.grenade_ability and class_loadout.grenade_ability.name and class_loadout.grenade_ability.name == "ogryn_grenade_friend_rock"
-end
 
 
 mod.on_all_mods_loaded = function()
@@ -149,21 +151,21 @@ mod.on_all_mods_loaded = function()
     -- Hook the rock tossing --
     mod:hook_require("scripts/extension_systems/weapon/actions/action_throw_grenade", function(altFire)
       mod:hook_safe(altFire, "start", function(self, ...)              
-        HoldingRock = WeOgryn() and self and self._weapon_template and self._weapon_template.projectile_template and self._weapon_template.projectile_template.name == "ogryn_grenade_friend_rock"        
+        HoldingRock = mod:weOgryn() and self and self._weapon_template and self._weapon_template.projectile_template and self._weapon_template.projectile_template.name == "ogryn_grenade_friend_rock"        
       end)
     end)
     
     Audio.hook_sound("wwise/events/weapon/stop_player_combat_weapon_grenader_loop", function(_, _, delta)
-        if WeOgryn() and HoldingRock then
-          HoldingRock = shoutRock(delta)
+        if mod:weOgryn() and HoldingRock then
+          HoldingRock = mod:shoutRock(delta)
         end      
       return true
     end)
 
      -- Hook when rock regenerates
     Audio.hook_sound("wwise/events/player/play_player_grenade_charge_restored_gen", function(_, _, delta)
-        if WeOgryn() and mod:get("rock_pickup") and doIHaveRock() then
-          pickupRock()
+        if mod:weOgryn() and mod:get("rock_pickup") and mod:doIHaveRock() then
+          mod:pickupRock()
         end      
       return true
     end)     
@@ -176,10 +178,12 @@ mod.on_all_mods_loaded = function()
         attacking_unit,
         optional_target_unit)
     if impact_fx.name:match("ogryn_friend_rock") then
-      if (mod:get("amusing_bonk") and (WeOgryn() and HoldingRock)) or mod:get("hear_all_bonk") then          
-        bonkRock(position)
-        if attacking_unit ~= Managers.player:local_player(1).player_unit and mod:get("respond_to_all_bonk") then
-          shoutRock(1, attacking_unit)
+      if (mod:get("amusing_bonk") and mod:weOgryn()) or mod:get("hear_all_bonk") then                         
+        if mod:get("hear_all_bonk") or (mod:get("amusing_bonk") and attacking_unit == Managers.player:local_player(1).player_unit) then                    
+          mod:bonkRock(position) 
+          if attacking_unit ~= Managers.player:local_player(1).player_unit and mod:get("respond_to_all_bonk") and mod:weOgryn() then            
+            mod:shoutRock(1, attacking_unit)
+          end
         end
       end   
     end
