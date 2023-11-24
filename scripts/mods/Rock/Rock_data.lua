@@ -20,7 +20,22 @@ return {
         setting_id = "rock_pickup",
         type = "checkbox",
         default_value = false
-      }
+      },
+      {
+        setting_id = "hear_all_bonk",
+        type = "checkbox",
+        default_value = false
+        },
+      {
+        setting_id = "friend_ogryn",
+        type = "checkbox",
+        default_value = false
+      },
+      {
+        setting_id = "respond_to_all_bonk",
+        type = "checkbox",
+        default_value = false
+        },
 		}
 	}
 }
