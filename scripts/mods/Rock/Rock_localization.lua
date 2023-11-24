@@ -19,4 +19,13 @@ return {
 		en = "Notify when you find a new rock",
 		ru = "Сообщать, когда вы находите новый камень",
 	},
+  hear_all_bonk = {
+    en = "Hear the bonk from other ogryn"
+  },
+  respond_to_all_bonk ={
+    en = "Respond to other ogryn rocks"
+  },
+friend_ogryn = {
+    en = "Hear from your buddy ogryn"
+  },
 }
