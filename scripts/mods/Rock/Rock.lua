@@ -12,7 +12,6 @@ local Audio
 local audio_files
 local HoldingRock
 local player
-local friendgryn = "friend"
 local impact = "impact"
 local pickup = "find"
   
@@ -70,14 +69,14 @@ end
 
 mod.bonkRock = function(self, source)
   if HoldingRock or mod:get("hear_all_bonk") then       
-      Audio.play_file(mod:getBonk(), { audio_type = "sfx"}, source, 0.001, 100)                
+      Promise.delay(0.01):next(function() Audio.play_file(mod:getBonk(), { audio_type = "sfx"}, source, 0.001, 100) end)
       return false
   end
 end
 
 mod.pickupRock = function(self, delta)
   if delta == nil or delta > 0.1 then
-    Audio.play_file(audio_files:random(pickup), { audio_type = "sfx" })                
+    Promise.delay(0.001):next(function() Audio.play_file(audio_files:random(pickup), { audio_type = "sfx" }) end)
   end
 end
 
