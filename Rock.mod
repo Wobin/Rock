@@ -8,5 +8,11 @@ return {
 			mod_localization = "Rock/scripts/mods/Rock/Rock_localization",
 		})
 	end,
+	load_after = {
+		"SimpleAudio",
+	},
+	require = {
+		"SimpleAudio",
+	},
 	packages = {},
 }

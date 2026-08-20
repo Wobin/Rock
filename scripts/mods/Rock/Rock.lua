@@ -1,20 +1,49 @@
 --[[
 Title: Rock
 Author: Wobin
-Date: 18/04/2024
+Date: 28/06/2026
 Repository: https://github.com/Wobin/Rock
-Version: 3.0
 ]]--
 
 local CharacterSheet = require("scripts/utilities/character_sheet")
 local mod = get_mod("Rock")
-local Audio
-local audio_files
+mod.version = mod.get_metadata and mod:get_metadata("version") or "unknown"
+local SimpleAudio
 local HoldingRock
 local player
-local impact = "impact"
-local pickup = "find"
-  
+local math_random = math.random
+
+local IMPACT_EXTENSIONS = { "mp3", "wav" }
+local FIND_EXTENSIONS = { "opus" }
+local impact_files = {}
+local find_files = {}
+
+local BONK_VOLUME = 100
+local BONK_MIN_DISTANCE = 0
+local BONK_MAX_DISTANCE = 100
+local BONK_DECAY = 0.001
+
+local function build_playlist(category, extensions)
+  local list = {}
+  if not (SimpleAudio and SimpleAudio.glob) then return list end
+  for _, ext in ipairs(extensions) do
+    local pattern = "mods/Rock/audio/"..category.."/*."..ext
+    local ok, result = pcall(SimpleAudio.glob, pattern)
+    if ok and result then
+      for _, path in ipairs(result:list()) do
+        list[#list + 1] = path
+      end
+    end
+  end
+  return list
+end
+
+local function random_track(list)
+  local n = #list
+  if n == 0 then return nil end
+  return list[math_random(n)]
+end
+
 local class_loadout = {
 	ability = {},
 	blitz = {},
@@ -43,7 +72,7 @@ mod.friendShout = function (self, attacking_unit)
   local count = 1
   for i,member in pairs(players) do            
     if member ~= player and member:is_human_controlled() and member._profile.archetype.breed == "ogryn" and (not attacking_unit or (attacking_unit and member.player_unit ~= attacking_unit)) then                  
-          Promise.delay(2 + (0.5 * count)):next(function() Audio.play("loc_"..(member:profile().selected_voice or "ogryn_a") .."__blitz_rock_a_"..string.format("%02d", math.random(1,10)), member.player_unit) end)
+          Promise.delay(2 + (0.5 * count)):next(function() SimpleAudio.play("loc_"..(member:profile().selected_voice or "ogryn_a") .."__blitz_rock_a_"..string.format("%02d", math.random(1,10)), member.player_unit) end)
           count = count + 1
     end
   end    
@@ -51,7 +80,7 @@ end
 
 mod.shoutRock = function(self, delta, override)    
     if (override or HoldingRock) and (delta == nil or delta > 0.1) then                
-       Promise.delay(0.5):next(function() Audio.play("loc_".. mod.ogrynVoice .."__blitz_rock_a_"..string.format("%02d", math.random(1,10))) end)
+       Promise.delay(0.5):next(function() SimpleAudio.play("loc_".. mod.ogrynVoice .."__blitz_rock_a_"..string.format("%02d", math.random(1,10))) end)
         if mod:get("friend_ogryn") then          
           mod:friendShout(override)
         end
@@ -60,50 +89,64 @@ mod.shoutRock = function(self, delta, override)
     return true
 end
 
-mod.getBonk = function()
-  if mod:get("single_bonk_noise") then 
-    return "impact/bonk_AgRFvsD.mp3" 
+mod.getBonkRelative = function()
+  if mod:get("single_bonk_noise") then
+    return "mods/Rock/audio/impact/bonk_AgRFvsD.mp3"
   end
-  return audio_files:random(impact)  
+  return random_track(impact_files)
+end
+
+mod.playBonkSpatial = function(self, source)
+  if not (SimpleAudio and SimpleAudio.play_file) then return false end
+  local rel = mod:getBonkRelative()
+  if not rel then return false end
+  local ok, id = pcall(SimpleAudio.play_file, rel, { audio_type = "sfx", volume = BONK_VOLUME }, source, BONK_DECAY, BONK_MIN_DISTANCE, BONK_MAX_DISTANCE)
+  return (ok and id) and true or false
 end
 
 mod.bonkRock = function(self, source)
-  if HoldingRock or mod:get("hear_all_bonk") then       
-      Promise.delay(0.01):next(function() Audio.play_file(mod:getBonk(), { audio_type = "sfx"}, source, 0.001, 100) end)
+  if HoldingRock or mod:get("hear_all_bonk") then
+      mod:playBonkSpatial(source)
       return false
   end
 end
 
 mod.pickupRock = function(self, delta)
-  if delta == nil or delta > 0.1 then
-    Promise.delay(0.001):next(function() Audio.play_file(audio_files:random(pickup), { audio_type = "sfx" }) end)
+  if (delta == nil or delta > 0.1) and SimpleAudio and SimpleAudio.play_file then
+    local path = random_track(find_files)
+    if path then
+      SimpleAudio.play_file(path, { audio_type = "sfx" })
+    end
   end
 end
 
 
 
 mod.on_all_mods_loaded = function()
-    Audio = get_mod("Audio")    
-    audio_files = Audio.new_files_handler()
-    
-    -- Hook the rock tossing --
+    SimpleAudio = get_mod("SimpleAudio")
+    if not SimpleAudio then
+      mod:error("Rock requires the SimpleAudio mod - please install and enable it.")
+      return
+    end
+    impact_files = build_playlist("impact", IMPACT_EXTENSIONS)
+    find_files = build_playlist("find", FIND_EXTENSIONS)
+
     mod:hook_require("scripts/extension_systems/weapon/actions/action_throw_grenade", function(altFire)
       mod:hook_safe(altFire, "start", function(self, ...)              
         HoldingRock = mod:weOgryn() and self and self._weapon_template and self._weapon_template.projectile_template and self._weapon_template.projectile_template.name == "ogryn_grenade_friend_rock"        
       end)
     end)
     
-    Audio.hook_sound("wwise/events/weapon/stop_player_combat_weapon_grenader_loop", function(_, _, delta)
-        if mod:weOgryn() and HoldingRock then                  
+    SimpleAudio.hook_sound("wwise/events/weapon/stop_player_combat_weapon_grenader_loop", function(_, _, delta)
+        if mod:weOgryn() and HoldingRock then
           HoldingRock = mod:shoutRock(delta)
-        end      
+        end
       return true
     end)
 
-    Audio.hook_sound("_blitz_rock_a", function() return false end)
-    
-     -- Hook when rock regenerates
-    Audio.hook_sound("wwise/events/player/play_player_grenade_charge_restored_gen", function(_, _, delta)
+    SimpleAudio.hook_sound("_blitz_rock_a", function() return false end)
+
+    SimpleAudio.hook_sound("wwise/events/player/play_player_grenade_charge_restored_gen", function(_, _, delta)
         if mod:weOgryn() and mod:get("rock_pickup") and mod:doIHaveRock() then          
           mod:pickupRock()
         end      

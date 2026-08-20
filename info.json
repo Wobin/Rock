@@ -1,0 +1,19 @@
+{
+	"name": "Rock",
+	"description": "Adds some spice to the Ogryn's Big Friendly Rock ability",
+	"version": "4.0",
+	"author": "Wobin",
+	"source": "https://github.com/Wobin/Rock",
+	"funding": {
+		"kofi": "https://ko-fi.com/wobin_dwonderdog"
+	},
+	"order": {
+		"require": [
+			"SimpleAudio"
+		],
+		"this_after": [
+			"SimpleAudio"
+		],
+		"this_before": []
+	}
+}
